@@ -40,11 +40,20 @@
 
 <script>
 (function () {
+  var REQUIRED_TOKEN = "a2bmB1Il--2fEWOLynS8BdwF";
+
   var params = new URLSearchParams(window.location.search);
   var target = params.get("u");
+  var token = params.get("t");
   var statusEl = document.getElementById("status");
   var manualWrap = document.getElementById("manual-wrap");
   var manualLink = document.getElementById("manual");
+
+  if (token !== REQUIRED_TOKEN) {
+    statusEl.textContent = "허용되지 않은 요청입니다.";
+    statusEl.id = "err";
+    return;
+  }
 
   if (!target) {
     statusEl.textContent = "링크에 대상 주소(?u=)가 없습니다.";
