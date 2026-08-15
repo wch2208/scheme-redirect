@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>앱으로 이동</title>
+<style>
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: #0b0b0f;
+    color: #eaeaea;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    margin: 0;
+    padding: 24px;
+    text-align: center;
+    box-sizing: border-box;
+  }
+  #status { font-size: 16px; margin-bottom: 20px; }
+  a#manual {
+    display: inline-block;
+    padding: 12px 24px;
+    background: #3b82f6;
+    color: white;
+    text-decoration: none;
+    border-radius: 8px;
+    font-size: 15px;
+  }
+  #err { color: #f87171; }
+</style>
+</head>
+<body>
+  <div id="status">앱으로 이동 중...</div>
+  <div id="manual-wrap" style="display:none">
+    <a id="manual" href="#">여기를 눌러 앱 열기</a>
+  </div>
+
+<script>
+(function () {
+  var params = new URLSearchParams(window.location.search);
+  var target = params.get("u");
+  var statusEl = document.getElementById("status");
+  var manualWrap = document.getElementById("manual-wrap");
+  var manualLink = document.getElementById("manual");
+
+  if (!target) {
+    statusEl.textContent = "링크에 대상 주소(?u=)가 없습니다.";
+    statusEl.id = "err";
+    return;
+  }
+
+  // block javascript:/data:/vbscript: — only allow app custom schemes or http(s)
+  var scheme = (target.split(":")[0] || "").toLowerCase();
+  var blocked = ["javascript", "data", "vbscript", "file"];
+  if (blocked.indexOf(scheme) !== -1) {
+    statusEl.textContent = "허용되지 않은 링크입니다.";
+    statusEl.id = "err";
+    return;
+  }
+
+  manualLink.href = target;
+  manualWrap.style.display = "block";
+
+  try {
+    window.location.href = target;
+  } catch (e) {
+    // ignore; manual button remains as fallback
+  }
+})();
+</script>
+</body>
+</html>
