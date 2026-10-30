@@ -66,6 +66,11 @@
     return;
   }
 
+  if (/%(?![0-9a-f]{2})/i.test(target)) {
+    fail("주소의 인코딩 형식이 올바르지 않습니다.");
+    return;
+  }
+
   var url;
   try {
     url = new URL(target);

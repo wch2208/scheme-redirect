@@ -54,26 +54,34 @@ test("accepts valid test links without the legacy token", () => {
   assert.deepEqual(navigations, [privateLink]);
 });
 
-test("parses a complete encoded outer query and preserves nested plus signs", () => {
-  const target = `intoss-private://dear-press/notice/detail?_deploymentId=${deploymentId}&queryParams=%7B%22q%22%3A%22a%2Bb%22%7D`;
-  const search = `?u=${encodeURIComponent(target)}&t=legacy-token`;
+test("parses a literal legacy outer query and preserves nested plus signs", () => {
+  const target = "intoss-private://dear-press/notice/detail?_deploymentId=123e4567-e89b-42d3-a456-426614174000&queryParams=%7B%22q%22%3A%22a%2Bb%22%7D";
+  const search = "?u=intoss-private%3A%2F%2Fdear-press%2Fnotice%2Fdetail%3F_deploymentId%3D123e4567-e89b-42d3-a456-426614174000%26queryParams%3D%257B%2522q%2522%253A%2522a%252Bb%2522%257D&t=legacy-token";
   const { navigations } = runRedirectSearch(search);
   assert.deepEqual(navigations, [target]);
 });
 
 test("rejects a double-encoded outer target", () => {
-  const target = `intoss-private://dear-press?_deploymentId=${deploymentId}`;
-  const search = `?u=${encodeURIComponent(encodeURIComponent(target))}`;
+  const search = "?u=intoss-private%253A%252F%252Fdear-press%253F_deploymentId%253D123e4567-e89b-42d3-a456-426614174000";
   const { navigations, elements } = runRedirectSearch(search);
   assert.deepEqual(navigations, []);
   assert.equal(elements.get("status").id, "err");
 });
 
-test("rejects malformed percent escapes in the outer target", () => {
-  const search = `?u=intoss-private%3A%2F%2Fdear-press%3F_deploymentId%3D${deploymentId}%25ZZ`;
+test("rejects a raw plus that URLSearchParams would turn into a space", () => {
+  const search = "?u=intoss-private%3A%2F%2Fdear-press%3F_deploymentId%3D123e4567-e89b-42d3-a456-426614174000%26campaign%3Da+b";
   const { navigations, elements } = runRedirectSearch(search);
   assert.deepEqual(navigations, []);
   assert.equal(elements.get("status").id, "err");
+  assert.equal(elements.get("manual-wrap").style.display, "none");
+});
+
+test("rejects malformed percent escapes in an otherwise-valid target query", () => {
+  const search = "?u=intoss-private%3A%2F%2Fdear-press%3F_deploymentId%3D123e4567-e89b-42d3-a456-426614174000%26campaign%3D%25ZZ";
+  const { navigations, elements } = runRedirectSearch(search);
+  assert.deepEqual(navigations, []);
+  assert.equal(elements.get("status").id, "err");
+  assert.equal(elements.get("manual-wrap").style.display, "none");
 });
 
 test("accepts test links without an optional host parameter", () => {
