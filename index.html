@@ -100,6 +100,7 @@
   });
   if (
     !authority ||
+    !/^dear-press$/i.test(authority[1]) ||
     authority[1].includes("@") ||
     url.username ||
     url.password ||

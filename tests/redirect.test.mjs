@@ -7,12 +7,7 @@ const html = await readFile(new URL("../index.html", import.meta.url), "utf8");
 const script = html.match(/<script>([\s\S]*?)<\/script>/)?.[1];
 assert.ok(script, "inline redirect script exists");
 
-function runRedirect(target, { token, duplicateTarget = false } = {}) {
-  const params = new URLSearchParams();
-  if (target !== undefined) params.append("u", target);
-  if (duplicateTarget && target !== undefined) params.append("u", target);
-  if (token !== undefined) params.set("t", token);
-
+function runRedirectSearch(search) {
   const elements = new Map([
     ["status", { id: "status", textContent: "", style: {} }],
     ["manual-wrap", { style: { display: "none" } }],
@@ -20,7 +15,7 @@ function runRedirect(target, { token, duplicateTarget = false } = {}) {
     ["guidance", { style: { display: "none" } }],
   ]);
   const navigations = [];
-  const location = { search: params.toString() ? `?${params}` : "" };
+  const location = { search };
   Object.defineProperty(location, "href", {
     set(value) { navigations.push(value); },
   });
@@ -32,6 +27,14 @@ function runRedirect(target, { token, duplicateTarget = false } = {}) {
   };
   vm.runInNewContext(script, context);
   return { elements, navigations };
+}
+
+function runRedirect(target, { token, duplicateTarget = false } = {}) {
+  const params = new URLSearchParams();
+  if (target !== undefined) params.append("u", target);
+  if (duplicateTarget && target !== undefined) params.append("u", target);
+  if (token !== undefined) params.set("t", token);
+  return runRedirectSearch(params.toString() ? `?${params}` : "");
 }
 
 const deploymentId = "123e4567-e89b-42d3-a456-426614174000";
@@ -49,6 +52,28 @@ test("accepts valid test links and preserves the exact query", () => {
 test("accepts valid test links without the legacy token", () => {
   const { navigations } = runRedirect(privateLink);
   assert.deepEqual(navigations, [privateLink]);
+});
+
+test("parses a complete encoded outer query and preserves nested plus signs", () => {
+  const target = `intoss-private://dear-press/notice/detail?_deploymentId=${deploymentId}&queryParams=%7B%22q%22%3A%22a%2Bb%22%7D`;
+  const search = `?u=${encodeURIComponent(target)}&t=legacy-token`;
+  const { navigations } = runRedirectSearch(search);
+  assert.deepEqual(navigations, [target]);
+});
+
+test("rejects a double-encoded outer target", () => {
+  const target = `intoss-private://dear-press?_deploymentId=${deploymentId}`;
+  const search = `?u=${encodeURIComponent(encodeURIComponent(target))}`;
+  const { navigations, elements } = runRedirectSearch(search);
+  assert.deepEqual(navigations, []);
+  assert.equal(elements.get("status").id, "err");
+});
+
+test("rejects malformed percent escapes in the outer target", () => {
+  const search = `?u=intoss-private%3A%2F%2Fdear-press%3F_deploymentId%3D${deploymentId}%25ZZ`;
+  const { navigations, elements } = runRedirectSearch(search);
+  assert.deepEqual(navigations, []);
+  assert.equal(elements.get("status").id, "err");
 });
 
 test("accepts test links without an optional host parameter", () => {
@@ -86,6 +111,7 @@ test("rejects missing, malformed, duplicate, or unsafe targets without navigatio
     ["credentials", `intoss-private://user@dear-press?_deploymentId=${deploymentId}&host=appsInTossHost`],
     ["empty user info", `intoss-private://@dear-press?_deploymentId=${deploymentId}&host=appsInTossHost`],
     ["port", `intoss-private://dear-press:444?_deploymentId=${deploymentId}&host=appsInTossHost`],
+    ["empty port", `intoss-private://dear-press:?_deploymentId=${deploymentId}&host=appsInTossHost`],
     ["path traversal", `intoss-private://dear-press/%2e%2e/evil?_deploymentId=${deploymentId}&host=appsInTossHost`],
     ["encoded slash path segment", `intoss-private://dear-press/path%2Fother?_deploymentId=${deploymentId}&host=appsInTossHost`],
     ["repeated slash path", `intoss-private://dear-press/path//other?_deploymentId=${deploymentId}&host=appsInTossHost`],
