@@ -30,53 +30,122 @@
     font-size: 15px;
   }
   #err { color: #f87171; }
+  #guidance { font-size: 14px; line-height: 1.5; max-width: 32rem; }
 </style>
 </head>
 <body>
-  <div id="status">앱으로 이동 중...</div>
+  <div id="status">앱 열기를 준비하고 있어요...</div>
   <div id="manual-wrap" style="display:none">
-    <a id="manual" href="#">여기를 눌러 앱 열기</a>
+    <a id="manual" href="#">토스에서 앱 열기</a>
   </div>
+  <p id="guidance" style="display:none">자동으로 열리지 않으면 위 버튼을 눌러 주세요. 토스 앱 설치 여부와 테스트 권한을 확인하거나 Safari에서 다시 열어 보세요.</p>
 
 <script>
 (function () {
-  var REQUIRED_TOKEN = "a2bmB1Il--2fEWOLynS8BdwF";
-
   var params = new URLSearchParams(window.location.search);
-  var target = params.get("u");
-  var token = params.get("t");
+  var targets = params.getAll("u");
   var statusEl = document.getElementById("status");
   var manualWrap = document.getElementById("manual-wrap");
   var manualLink = document.getElementById("manual");
+  var guidance = document.getElementById("guidance");
 
-  if (token !== REQUIRED_TOKEN) {
-    statusEl.textContent = "허용되지 않은 요청입니다.";
+  function fail(message) {
+    statusEl.textContent = message;
     statusEl.id = "err";
+  }
+
+  if (targets.length !== 1 || !targets[0]) {
+    fail(targets.length ? "대상 주소가 여러 개라 열 수 없습니다." : "링크에 대상 주소(?u=)가 없습니다.");
     return;
   }
 
-  if (!target) {
-    statusEl.textContent = "링크에 대상 주소(?u=)가 없습니다.";
-    statusEl.id = "err";
+  // URLSearchParams decodes the outer u parameter once. Parse that value directly.
+  var target = targets[0];
+  if (/[\u0000-\u0020\u007f]/.test(target)) {
+    fail("주소에 공백이나 제어 문자가 포함되어 있습니다.");
     return;
   }
 
-  // block javascript:/data:/vbscript: — only allow app custom schemes or http(s)
-  var scheme = (target.split(":")[0] || "").toLowerCase();
-  var blocked = ["javascript", "data", "vbscript", "file"];
-  if (blocked.indexOf(scheme) !== -1) {
-    statusEl.textContent = "허용되지 않은 링크입니다.";
-    statusEl.id = "err";
+  if (/%(?![0-9a-f]{2})/i.test(target)) {
+    fail("주소의 인코딩 형식이 올바르지 않습니다.");
     return;
+  }
+
+  var url;
+  try {
+    url = new URL(target);
+  } catch (e) {
+    fail("대상 주소를 확인할 수 없습니다.");
+    return;
+  }
+
+  if (url.protocol !== "intoss-private:" && url.protocol !== "intoss:") {
+    fail("토스 앱 링크만 열 수 있습니다.");
+    return;
+  }
+
+  if (url.hostname !== "dear-press") {
+    fail("마음인쇄소 앱 링크만 열 수 있습니다.");
+    return;
+  }
+
+  var authority = target.match(/^[a-z][a-z0-9+.-]*:\/\/([^/?#]*)/i);
+  var rawPathMatch = target.match(/^[a-z][a-z0-9+.-]*:\/\/[^/?#]*(\/[^?#]*)?/i);
+  var rawPath = rawPathMatch && rawPathMatch[1] ? rawPathMatch[1] : "";
+  var pathBody = rawPath.replace(/^\//, "").replace(/\/$/, "");
+  var pathSegments = pathBody ? pathBody.split("/") : [];
+  var invalidPath = rawPath.includes("\\") || pathSegments.some(function (segment) {
+    if (!segment) return true;
+    try {
+      var decoded = decodeURIComponent(segment);
+      return decoded === "." || decoded === ".." || /[\\/\u0000-\u001f\u007f]/.test(decoded);
+    } catch (e) {
+      return true;
+    }
+  });
+  if (
+    !authority ||
+    !/^dear-press$/i.test(authority[1]) ||
+    authority[1].includes("@") ||
+    url.username ||
+    url.password ||
+    url.port ||
+    !rawPathMatch ||
+    invalidPath ||
+    target.includes("#")
+  ) {
+    fail("주소 형식이 올바르지 않습니다.");
+    return;
+  }
+
+  var hostValues = url.searchParams.getAll("host");
+  var deploymentIds = url.searchParams.getAll("_deploymentId");
+  if (hostValues.length > 1 || deploymentIds.length > 1) {
+    fail("주소에 중복된 항목이 있습니다.");
+    return;
+  }
+
+  if (hostValues.length === 1 && hostValues[0] !== "appsInTossHost") {
+    fail("토스 앱 열기 주소가 올바르지 않습니다.");
+    return;
+  }
+
+  if (url.protocol === "intoss-private:") {
+    if (deploymentIds.length !== 1 || !/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(deploymentIds[0])) {
+      fail("테스트 배포 정보가 없거나 올바르지 않습니다.");
+      return;
+    }
   }
 
   manualLink.href = target;
   manualWrap.style.display = "block";
+  guidance.style.display = "block";
+  statusEl.textContent = "앱을 여는 중입니다. 자동으로 열리지 않으면 아래 버튼을 눌러 주세요.";
 
   try {
     window.location.href = target;
   } catch (e) {
-    // ignore; manual button remains as fallback
+    // The manual button remains available if automatic custom-scheme navigation is blocked.
   }
 })();
 </script>
